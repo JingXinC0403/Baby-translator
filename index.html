@@ -37,139 +37,128 @@
     #trainingContainer {
       margin-top: 30px;
     }
+    input {
+      padding: 10px;
+      font-size: 1em;
+      margin: 5px;
+      width: 200px;
+    }
   </style>
 </head>
 <body>
   <h1>Baby Sound Translator</h1>
-  
-  <!-- Button to Start Listening -->
+
+  <!-- Listening Controls -->
   <button id="startBtn">Start Listening</button>
   <button id="stopBtn" style="display: none;">Stop Listening</button>
   <p id="translation">Translate Baby Sounds...</p>
 
-  <!-- New Div to Display the Translated Meaning -->
+  <!-- Translated Output -->
   <div id="translatedMeaning"></div>
 
-  <!-- Training Section -->
+  <!-- Training Interface -->
   <div id="trainingContainer">
     <h3>Train New Sound</h3>
-    <input type="text" id="soundLabel" placeholder="Enter sound label (e.g., 'mama')" />
+    <input type="text" id="babySound" placeholder="Enter baby sound (e.g., 'mama')" />
+    <input type="text" id="soundMeaning" placeholder="Enter meaning (e.g., 'hungry')" />
+    <br />
     <button id="trainBtn">Train Sound</button>
     <button id="clearDataBtn">Clear Training Data</button>
   </div>
 
   <script>
-    // Check if Speech Recognition is supported
     if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
       alert("Speech Recognition API is not supported in this browser.");
     }
 
-    // Initialize Speech Recognition (Web Speech API)
     const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.continuous = true; // Keep recognizing speech
-    recognition.interimResults = true; // Allow partial results
+    recognition.continuous = true;
+    recognition.interimResults = false;
 
     const translationElement = document.getElementById('translation');
-    const soundLabelInput = document.getElementById('soundLabel');
+    const babySoundInput = document.getElementById('babySound');
+    const soundMeaningInput = document.getElementById('soundMeaning');
     const trainBtn = document.getElementById('trainBtn');
     const clearDataBtn = document.getElementById('clearDataBtn');
     const translatedMeaningElement = document.getElementById('translatedMeaning');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
 
-    // Object to store trained sounds
     let trainedSounds = JSON.parse(localStorage.getItem('trainedSounds') || '{}');
-
-    // Flag to check if the recognition is active
     let isListening = false;
 
-    // Start listening for baby sounds
     startBtn.onclick = () => {
       if (isListening) {
-        alert("Already listening! Please stop the current session before starting a new one.");
+        alert("Already listening! Please stop first.");
         return;
       }
 
       recognition.start();
       isListening = true;
       translationElement.textContent = "Listening...";
-      startBtn.disabled = true;  // Disable the button while listening
-      stopBtn.style.display = 'inline'; // Show Stop Listening button
+      startBtn.disabled = true;
+      stopBtn.style.display = 'inline';
     };
 
-    // Stop listening manually
     stopBtn.onclick = () => {
       recognition.stop();
       translationElement.textContent = "Stopped listening.";
-      startBtn.disabled = false; // Re-enable start button
-      stopBtn.style.display = 'none'; // Hide Stop Listening button
+      startBtn.disabled = false;
+      stopBtn.style.display = 'none';
       isListening = false;
     };
 
-    // On speech recognition result
     recognition.onresult = (event) => {
-      let transcript = event.results[event.resultIndex][0].transcript.trim().toLowerCase();
-      console.log("Recognized Sound:", transcript);
+      const transcript = event.results[event.resultIndex][0].transcript.trim().toLowerCase();
+      console.log("Recognized:", transcript);
 
-      // Check if the baby sound is in our trained data
       if (trainedSounds[transcript]) {
-        translationElement.textContent = `Translated: ${trainedSounds[transcript]}`;
-        translatedMeaningElement.textContent = `Meaning: ${trainedSounds[transcript]}`;
-        translatedMeaningElement.style.display = 'block';  // Show the translated meaning box
-        speakTranslation(trainedSounds[transcript]);
+        const meaning = trainedSounds[transcript];
+        translationElement.textContent = `Translated: ${meaning}`;
+        translatedMeaningElement.textContent = `Meaning: ${meaning}`;
+        translatedMeaningElement.style.display = 'block';
+        speakTranslation(meaning);
       } else {
-        translationElement.textContent = "No recognized sound found.";
-        translatedMeaningElement.style.display = 'none';  // Hide the translated meaning box
+        translationElement.textContent = `Heard: "${transcript}", but no match found.`;
+        translatedMeaningElement.style.display = 'none';
       }
     };
 
-    // Function to convert text to speech (speak the translation)
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      translationElement.textContent = "Error recognizing sound.";
+      startBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      isListening = false;
+    };
+
     function speakTranslation(text) {
       const speech = new SpeechSynthesisUtterance(text);
       speechSynthesis.speak(speech);
     }
 
-    // Train new sound and associate with label
     trainBtn.onclick = () => {
-      const label = soundLabelInput.value.trim();
-      if (!label) {
-        alert('Please enter a label!');
+      const sound = babySoundInput.value.trim().toLowerCase();
+      const meaning = soundMeaningInput.value.trim();
+
+      if (!sound || !meaning) {
+        alert('Please enter both the baby sound and its meaning!');
         return;
       }
 
-      // Save the label and its associated sound in the trainedSounds object
-      const sound = soundLabelInput.value.trim().toLowerCase();
-      trainedSounds[sound] = label;
-
-      // Save to localStorage
+      trainedSounds[sound] = meaning;
       localStorage.setItem('trainedSounds', JSON.stringify(trainedSounds));
-
-      alert(`Sound "${sound}" trained as "${label}"!`);
-      soundLabelInput.value = ''; // Clear input
+      alert(`Trained "${sound}" as meaning "${meaning}".`);
+      babySoundInput.value = '';
+      soundMeaningInput.value = '';
     };
 
-    // Clear all trained data
     clearDataBtn.onclick = () => {
-      if (confirm('Are you sure you want to clear all trained data?')) {
-        trainedSounds = {}; // Clear the trained sounds object
-        localStorage.removeItem('trainedSounds'); // Clear from localStorage
-        alert('All training data cleared.');
+      if (confirm('Clear all trained data?')) {
+        trainedSounds = {};
+        localStorage.removeItem('trainedSounds');
+        alert('Training data cleared.');
       }
-    };
-
-    // Handle errors
-    recognition.onerror = (event) => {
-      console.error('Error occurred in speech recognition:', event.error);
-      translationElement.textContent = "Error recognizing sound!";
-    };
-
-    // Optional: Stop recognition after a period of time
-    recognition.onspeechend = () => {
-      recognition.stop();
-      translationElement.textContent = "Stopped listening.";
-      startBtn.disabled = false; // Re-enable the start button
-      stopBtn.style.display = 'none'; // Hide Stop Listening button
-      isListening = false;
     };
   </script>
 </body>
