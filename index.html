@@ -5,16 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Baby Sound Translator</title>
   <style>
+    :root {
+      --bg-color: #fdfdfd;
+      --text-color: #333;
+      --accent-color: #3a5f87;
+      --button-color: #3a5f87;
+      --button-hover: #2e4c6d;
+      --input-bg: #fff;
+      --highlight-bg: #ff6347;
+    }
+
+    body.dark {
+      --bg-color: #1e1e1e;
+      --text-color: #e0e0e0;
+      --accent-color: #87cefa;
+      --button-color: #444;
+      --button-hover: #666;
+      --input-bg: #333;
+      --highlight-bg: #d9534f;
+    }
+
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #fdfdfd;
-      color: #333;
+      background-color: var(--bg-color);
+      color: var(--text-color);
       padding: 20px;
       text-align: center;
+      transition: background-color 0.3s, color 0.3s;
     }
 
     h1 {
-      color: #3a5f87;
+      color: var(--accent-color);
     }
 
     button {
@@ -23,14 +44,14 @@
       font-size: 1em;
       border: none;
       border-radius: 8px;
-      background-color: #3a5f87;
+      background-color: var(--button-color);
       color: white;
       cursor: pointer;
       transition: background-color 0.2s ease;
     }
 
     button:hover {
-      background-color: #2e4c6d;
+      background-color: var(--button-hover);
     }
 
     input[type="text"], input[type="file"] {
@@ -40,19 +61,21 @@
       border-radius: 6px;
       border: 1px solid #ccc;
       font-size: 1em;
+      background-color: var(--input-bg);
+      color: var(--text-color);
     }
 
     #translation {
       margin-top: 20px;
       font-size: 1.6em;
-      color: #555;
+      color: var(--text-color);
     }
 
     #translatedMeaning {
       margin-top: 20px;
       font-size: 1.3em;
       color: #fff;
-      background-color: #ff6347;
+      background-color: var(--highlight-bg);
       padding: 15px;
       border-radius: 10px;
       display: none;
@@ -63,11 +86,21 @@
 
     #trainingContainer {
       margin-top: 40px;
-      background-color: #f0f8ff;
+      background-color: rgba(200, 230, 255, 0.1);
       padding: 20px;
       border-radius: 12px;
       max-width: 600px;
       margin: 40px auto 0;
+      border: 1px solid var(--accent-color);
+    }
+
+    #themeToggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 8px 16px;
+      background-color: var(--button-color);
+      color: white;
     }
 
     @media screen and (max-width: 600px) {
@@ -78,6 +111,8 @@
   </style>
 </head>
 <body>
+
+  <button id="themeToggle">🌙 Dark Mode</button>
 
   <h1>👶 Baby Sound Translator</h1>
 
@@ -92,9 +127,10 @@
     <button id="trainBtn">Train Sound</button>
     <button id="clearDataBtn" style="background-color: #ff4d4d;">Clear All Training</button>
     <br><br>
-    <button id="downloadDataBtn" style="background-color: #2ecc71;">⬇️ Download Data</button>
+    <button id="exportDataBtn" style="background-color: #2ecc71;">📤 Export Data</button>
+    <button id="importDataBtn" style="background-color: #3498db;">📥 Import Data</button>
     <br>
-    <input type="file" id="uploadDataInput" />
+    <input type="file" id="uploadDataInput" style="display: none;" />
   </div>
 
   <script>
@@ -110,6 +146,10 @@
     const soundLabelInput = document.getElementById('soundLabel');
     const trainBtn = document.getElementById('trainBtn');
     const clearDataBtn = document.getElementById('clearDataBtn');
+    const themeToggle = document.getElementById('themeToggle');
+    const exportBtn = document.getElementById('exportDataBtn');
+    const importBtn = document.getElementById('importDataBtn');
+    const uploadInput = document.getElementById('uploadDataInput');
 
     let isListening = false;
     let trainedSounds = JSON.parse(localStorage.getItem('trainedSounds') || '{}');
@@ -189,17 +229,19 @@
       }
     };
 
-    // Download training data
-    document.getElementById('downloadDataBtn').onclick = () => {
+    exportBtn.onclick = () => {
       const blob = new Blob([JSON.stringify(trainedSounds, null, 2)], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'baby-sound-data.json';
+      link.download = 'baby-sound-export.json';
       link.click();
     };
 
-    // Upload training data
-    document.getElementById('uploadDataInput').addEventListener('change', function (event) {
+    importBtn.onclick = () => {
+      uploadInput.click();
+    };
+
+    uploadInput.addEventListener('change', function (event) {
       const file = event.target.files[0];
       if (!file) return;
 
@@ -211,11 +253,26 @@
           localStorage.setItem('trainedSounds', JSON.stringify(trainedSounds));
           alert('✅ Training data imported successfully!');
         } catch (err) {
-          alert('❌ Failed to load JSON. Make sure it’s a valid file.');
+          alert('❌ Invalid JSON file.');
         }
       };
       reader.readAsText(file);
     });
+
+    // Theme toggle
+    function setTheme(darkMode) {
+      document.body.classList.toggle('dark', darkMode);
+      localStorage.setItem('darkMode', darkMode);
+      themeToggle.textContent = darkMode ? '☀️ Light Mode' : '🌙 Dark Mode';
+    }
+
+    const savedTheme = localStorage.getItem('darkMode') === 'true';
+    setTheme(savedTheme);
+
+    themeToggle.onclick = () => {
+      const isDark = document.body.classList.contains('dark');
+      setTheme(!isDark);
+    };
   </script>
 </body>
 </html>
