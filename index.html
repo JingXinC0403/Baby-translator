@@ -71,17 +71,25 @@
       color: var(--text-color);
     }
 
-    #translatedMeaning {
+    #heardSound, #translatedMeaning {
       margin-top: 20px;
       font-size: 1.3em;
-      color: #fff;
-      background-color: var(--highlight-bg);
       padding: 15px;
       border-radius: 10px;
-      display: none;
       max-width: 500px;
       margin-left: auto;
       margin-right: auto;
+      display: none;
+    }
+
+    #heardSound {
+      background-color: #ffe4b5;
+      color: #333;
+    }
+
+    #translatedMeaning {
+      background-color: var(--highlight-bg);
+      color: white;
     }
 
     #trainingContainer {
@@ -103,6 +111,27 @@
       color: white;
     }
 
+    #historyLog {
+      margin-top: 50px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: left;
+    }
+
+    #historyLog ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    #historyLog li {
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background-color: var(--input-bg);
+    }
+
     @media screen and (max-width: 600px) {
       input {
         width: 90%;
@@ -119,6 +148,8 @@
   <button id="startBtn">🎤 Start Listening</button>
   <button id="stopBtn" style="display: none;">🛑 Stop Listening</button>
   <p id="translation">Waiting to hear baby sounds...</p>
+
+  <div id="heardSound"><strong>Heard:</strong> <span id="heardText"></span></div>
   <div id="translatedMeaning"></div>
 
   <div id="trainingContainer">
@@ -131,6 +162,12 @@
     <button id="importDataBtn" style="background-color: #3498db;">📥 Import Data</button>
     <br>
     <input type="file" id="uploadDataInput" style="display: none;" />
+  </div>
+
+  <div id="historyLog">
+    <h3>🕒 History Log</h3>
+    <button onclick="clearHistory()" style="background-color: #ff7777; margin-bottom: 15px;">🧹 Clear History</button>
+    <ul id="logList"></ul>
   </div>
 
   <script>
@@ -150,13 +187,39 @@
     const exportBtn = document.getElementById('exportDataBtn');
     const importBtn = document.getElementById('importDataBtn');
     const uploadInput = document.getElementById('uploadDataInput');
+    const heardBox = document.getElementById('heardSound');
+    const heardText = document.getElementById('heardText');
+    const logList = document.getElementById('logList');
 
     let isListening = false;
     let trainedSounds = JSON.parse(localStorage.getItem('trainedSounds') || '{}');
+    let historyLog = JSON.parse(localStorage.getItem('historyLog') || '[]');
+
+    renderHistory();
 
     function speak(text) {
       const utter = new SpeechSynthesisUtterance(text);
       window.speechSynthesis.speak(utter);
+    }
+
+    function renderHistory() {
+      logList.innerHTML = '';
+      historyLog.forEach(entry => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <small>🕒 ${entry.time}</small><br>
+          <strong>👂 Heard:</strong> ${entry.heard}<br>
+          <strong>🍼 Meaning:</strong> ${entry.meaning}`;
+        logList.appendChild(li);
+      });
+    }
+
+    function clearHistory() {
+      if (confirm("Clear all history?")) {
+        historyLog = [];
+        localStorage.removeItem('historyLog');
+        renderHistory();
+      }
     }
 
     startBtn.onclick = () => {
@@ -178,10 +241,17 @@
 
     recognition.onresult = (event) => {
       const transcript = event.results[event.resultIndex][0].transcript.trim().toLowerCase();
-      console.log("Recognized:", transcript);
+      heardText.textContent = transcript;
+      heardBox.style.display = 'block';
+
+      const meaning = trainedSounds[transcript] || 'Unknown';
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      historyLog.unshift({ heard: transcript, meaning, time: timestamp });
+      localStorage.setItem('historyLog', JSON.stringify(historyLog));
+      renderHistory();
 
       if (trainedSounds[transcript]) {
-        const meaning = trainedSounds[transcript];
         translationEl.textContent = `✅ Recognized: "${transcript}"`;
         translatedEl.textContent = `🍼 Meaning: ${meaning}`;
         translatedEl.style.display = 'block';
@@ -259,7 +329,6 @@
       reader.readAsText(file);
     });
 
-    // Theme toggle
     function setTheme(darkMode) {
       document.body.classList.toggle('dark', darkMode);
       localStorage.setItem('darkMode', darkMode);
