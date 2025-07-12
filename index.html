@@ -39,8 +39,8 @@
     }
 
     button {
-      padding: 12px 20px;
-      margin: 10px;
+      padding: 10px 18px;
+      margin: 6px;
       font-size: 1em;
       border: none;
       border-radius: 8px;
@@ -65,40 +65,26 @@
       color: var(--text-color);
     }
 
-    #translation {
-      margin-top: 20px;
-      font-size: 1.6em;
-      color: var(--text-color);
-    }
-
-    #heardSound, #translatedMeaning {
+    #translatedMeaning {
       margin-top: 20px;
       font-size: 1.3em;
       padding: 15px;
       border-radius: 10px;
+      background-color: var(--highlight-bg);
+      color: white;
+      display: none;
       max-width: 500px;
       margin-left: auto;
       margin-right: auto;
-      display: none;
-    }
-
-    #heardSound {
-      background-color: #ffe4b5;
-      color: #333;
-    }
-
-    #translatedMeaning {
-      background-color: var(--highlight-bg);
-      color: white;
     }
 
     #trainingContainer {
       margin-top: 40px;
-      background-color: rgba(200, 230, 255, 0.1);
       padding: 20px;
       border-radius: 12px;
       max-width: 600px;
-      margin: 40px auto 0;
+      margin-left: auto;
+      margin-right: auto;
       border: 1px solid var(--accent-color);
     }
 
@@ -106,67 +92,59 @@
       position: fixed;
       top: 10px;
       right: 10px;
-      padding: 8px 16px;
-      background-color: var(--button-color);
-      color: white;
     }
 
     #historyLog {
-      margin-top: 50px;
+      margin-top: 40px;
       max-width: 700px;
       margin-left: auto;
       margin-right: auto;
       text-align: left;
     }
 
-    #historyLog ul {
-      list-style: none;
-      padding-left: 0;
-    }
-
     #historyLog li {
+      background-color: var(--input-bg);
       margin-bottom: 10px;
       padding: 10px;
-      border: 1px solid #ccc;
       border-radius: 8px;
-      background-color: var(--input-bg);
+      list-style: none;
+      border: 1px solid #ccc;
     }
 
-    @media screen and (max-width: 600px) {
-      input {
-        width: 90%;
-      }
+    .audio-control {
+      margin-top: 5px;
     }
   </style>
 </head>
 <body>
 
   <button id="themeToggle">🌙 Dark Mode</button>
-
   <h1>👶 Baby Sound Translator</h1>
 
   <button id="startBtn">🎤 Start Listening</button>
-  <button id="stopBtn" style="display: none;">🛑 Stop Listening</button>
+  <button id="stopBtn" style="display:none;">🛑 Stop Listening</button>
   <p id="translation">Waiting to hear baby sounds...</p>
-
-  <div id="heardSound"><strong>Heard:</strong> <span id="heardText"></span></div>
   <div id="translatedMeaning"></div>
 
   <div id="trainingContainer">
-    <h3>Train a New Sound</h3>
-    <input type="text" id="soundLabel" placeholder="Type the sound (e.g., 'mama')" />
-    <button id="trainBtn">Train Sound</button>
-    <button id="clearDataBtn" style="background-color: #ff4d4d;">Clear All Training</button>
+    <h3>🧠 Train a New Sound</h3>
+    <input type="text" id="soundKey" placeholder="What is the baby saying? (e.g. 'mama')" />
+    <input type="text" id="soundMeaning" placeholder="What does it mean? (e.g. 'hungry')" />
+    <br>
+    <button id="recordSampleBtn">🎙 Record Sample</button>
+    <button id="stopRecordBtn" style="display:none;">⏹ Stop</button>
+    <br>
+    <button id="trainBtn">💾 Train Sound</button>
+    <button id="clearDataBtn" style="background-color: #e74c3c;">🧹 Clear Training</button>
     <br><br>
     <button id="exportDataBtn" style="background-color: #2ecc71;">📤 Export Data</button>
     <button id="importDataBtn" style="background-color: #3498db;">📥 Import Data</button>
-    <br>
-    <input type="file" id="uploadDataInput" style="display: none;" />
+    <input type="file" id="uploadDataInput" style="display:none;">
   </div>
 
   <div id="historyLog">
     <h3>🕒 History Log</h3>
-    <button onclick="clearHistory()" style="background-color: #ff7777; margin-bottom: 15px;">🧹 Clear History</button>
+    <button onclick="clearHistory()" style="background-color: #ff7777;">🧹 Clear History</button>
     <ul id="logList"></ul>
   </div>
 
@@ -176,50 +154,35 @@
     recognition.interimResults = false;
     recognition.lang = 'en-US';
 
-    const translationEl = document.getElementById('translation');
-    const translatedEl = document.getElementById('translatedMeaning');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
-    const soundLabelInput = document.getElementById('soundLabel');
+    const translationEl = document.getElementById('translation');
+    const translatedEl = document.getElementById('translatedMeaning');
+    const soundKey = document.getElementById('soundKey');
+    const soundMeaning = document.getElementById('soundMeaning');
     const trainBtn = document.getElementById('trainBtn');
     const clearDataBtn = document.getElementById('clearDataBtn');
     const themeToggle = document.getElementById('themeToggle');
     const exportBtn = document.getElementById('exportDataBtn');
     const importBtn = document.getElementById('importDataBtn');
     const uploadInput = document.getElementById('uploadDataInput');
-    const heardBox = document.getElementById('heardSound');
-    const heardText = document.getElementById('heardText');
+    const recordSampleBtn = document.getElementById('recordSampleBtn');
+    const stopRecordBtn = document.getElementById('stopRecordBtn');
     const logList = document.getElementById('logList');
 
     let isListening = false;
     let trainedSounds = JSON.parse(localStorage.getItem('trainedSounds') || '{}');
+    let soundSamples = JSON.parse(localStorage.getItem('soundSamples') || '{}');
     let historyLog = JSON.parse(localStorage.getItem('historyLog') || '[]');
 
     renderHistory();
 
+    let mediaRecorder;
+    let recordedChunks = [];
+
     function speak(text) {
       const utter = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(utter);
-    }
-
-    function renderHistory() {
-      logList.innerHTML = '';
-      historyLog.forEach(entry => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-          <small>🕒 ${entry.time}</small><br>
-          <strong>👂 Heard:</strong> ${entry.heard}<br>
-          <strong>🍼 Meaning:</strong> ${entry.meaning}`;
-        logList.appendChild(li);
-      });
-    }
-
-    function clearHistory() {
-      if (confirm("Clear all history?")) {
-        historyLog = [];
-        localStorage.removeItem('historyLog');
-        renderHistory();
-      }
+      speechSynthesis.speak(utter);
     }
 
     startBtn.onclick = () => {
@@ -241,9 +204,6 @@
 
     recognition.onresult = (event) => {
       const transcript = event.results[event.resultIndex][0].transcript.trim().toLowerCase();
-      heardText.textContent = transcript;
-      heardBox.style.display = 'block';
-
       const meaning = trainedSounds[transcript] || 'Unknown';
       const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -262,72 +222,123 @@
       }
     };
 
-    recognition.onerror = (e) => {
-      console.error("Speech recognition error:", e.error);
-      translationEl.textContent = "⚠️ Error recognizing sound.";
-      isListening = false;
-      startBtn.style.display = 'inline-block';
-      stopBtn.style.display = 'none';
-    };
-
-    recognition.onspeechend = () => {
-      recognition.stop();
-      isListening = false;
-      translationEl.textContent = "🎤 Speech ended.";
-      startBtn.style.display = 'inline-block';
-      stopBtn.style.display = 'none';
-    };
-
     trainBtn.onclick = () => {
-      const input = soundLabelInput.value.trim().toLowerCase();
-      if (!input) {
-        alert("Please enter a sound label.");
+      const key = soundKey.value.trim().toLowerCase();
+      const meaning = soundMeaning.value.trim();
+      if (!key || !meaning) {
+        alert("Please enter both sound and meaning.");
         return;
       }
-
-      trainedSounds[input] = input;
+      trainedSounds[key] = meaning;
       localStorage.setItem('trainedSounds', JSON.stringify(trainedSounds));
-      alert(`✅ Sound "${input}" trained!`);
-      soundLabelInput.value = '';
+      alert(`✅ Sound "${key}" trained as "${meaning}"`);
+      soundKey.value = '';
+      soundMeaning.value = '';
     };
 
     clearDataBtn.onclick = () => {
-      if (confirm("⚠️ Are you sure you want to delete all trained sounds?")) {
+      if (confirm("Clear all training data?")) {
         trainedSounds = {};
         localStorage.removeItem('trainedSounds');
-        alert("🗑️ All training data cleared.");
+        soundSamples = {};
+        localStorage.removeItem('soundSamples');
+        alert("Training data cleared.");
       }
     };
 
     exportBtn.onclick = () => {
-      const blob = new Blob([JSON.stringify(trainedSounds, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify({ trainedSounds, soundSamples })], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'baby-sound-export.json';
+      link.download = 'baby-sound-data.json';
       link.click();
     };
 
-    importBtn.onclick = () => {
-      uploadInput.click();
-    };
+    importBtn.onclick = () => uploadInput.click();
 
-    uploadInput.addEventListener('change', function (event) {
-      const file = event.target.files[0];
+    uploadInput.onchange = e => {
+      const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
-      reader.onload = function (e) {
+      reader.onload = event => {
         try {
-          const importedData = JSON.parse(e.target.result);
-          trainedSounds = importedData;
+          const data = JSON.parse(event.target.result);
+          trainedSounds = data.trainedSounds || {};
+          soundSamples = data.soundSamples || {};
           localStorage.setItem('trainedSounds', JSON.stringify(trainedSounds));
-          alert('✅ Training data imported successfully!');
-        } catch (err) {
-          alert('❌ Invalid JSON file.');
+          localStorage.setItem('soundSamples', JSON.stringify(soundSamples));
+          alert("✅ Data imported!");
+        } catch {
+          alert("❌ Invalid file.");
         }
       };
       reader.readAsText(file);
-    });
+    };
+
+    recordSampleBtn.onclick = async () => {
+      const key = soundKey.value.trim().toLowerCase();
+      if (!key) {
+        alert("Enter the baby sound first.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            soundSamples[key] = reader.result;
+            localStorage.setItem('soundSamples', JSON.stringify(soundSamples));
+          };
+          reader.readAsDataURL(blob);
+        };
+        mediaRecorder.start();
+        recordSampleBtn.style.display = 'none';
+        stopRecordBtn.style.display = 'inline-block';
+      } catch (err) {
+        alert("Microphone access denied.");
+      }
+    };
+
+    stopRecordBtn.onclick = () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+      recordSampleBtn.style.display = 'inline-block';
+      stopRecordBtn.style.display = 'none';
+    };
+
+    function renderHistory() {
+      logList.innerHTML = '';
+      historyLog.forEach(entry => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <small>🕒 ${entry.time}</small><br>
+          <strong>👂 Heard:</strong> ${entry.heard}<br>
+          <strong>🍼 Meaning:</strong> ${entry.meaning}`;
+        if (soundSamples[entry.heard]) {
+          const audio = new Audio(soundSamples[entry.heard]);
+          const btn = document.createElement('button');
+          btn.className = 'audio-control';
+          btn.textContent = '▶️ Play Sample';
+          btn.onclick = () => audio.play();
+          li.appendChild(document.createElement('br'));
+          li.appendChild(btn);
+        }
+        logList.appendChild(li);
+      });
+    }
+
+    function clearHistory() {
+      if (confirm("Clear history log?")) {
+        historyLog = [];
+        localStorage.removeItem('historyLog');
+        renderHistory();
+      }
+    }
 
     function setTheme(darkMode) {
       document.body.classList.toggle('dark', darkMode);
