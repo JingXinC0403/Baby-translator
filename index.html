@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Baby Sound Translator</title>
   <style>
     :root {
@@ -34,58 +34,53 @@
       transition: background-color 0.3s, color 0.3s;
     }
 
-    h1 {
-      color: var(--accent-color);
-    }
+    h1 { color: var(--accent-color); }
 
     button {
       padding: 10px 18px;
-      margin: 6px;
+      margin: 8px;
       font-size: 1em;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       background-color: var(--button-color);
       color: white;
       cursor: pointer;
-      transition: background-color 0.2s ease;
     }
 
-    button:hover {
-      background-color: var(--button-hover);
-    }
+    button:hover { background-color: var(--button-hover); }
 
     input[type="text"], input[type="file"] {
       padding: 10px;
-      width: 60%;
-      margin: 10px 0;
+      width: 70%;
       border-radius: 6px;
       border: 1px solid #ccc;
-      font-size: 1em;
       background-color: var(--input-bg);
       color: var(--text-color);
+      margin-bottom: 10px;
     }
 
     #translatedMeaning {
       margin-top: 20px;
       font-size: 1.3em;
+      color: #fff;
+      background-color: var(--highlight-bg);
       padding: 15px;
       border-radius: 10px;
-      background-color: var(--highlight-bg);
-      color: white;
       display: none;
       max-width: 500px;
       margin-left: auto;
       margin-right: auto;
     }
 
-    #trainingContainer {
-      margin-top: 40px;
-      padding: 20px;
-      border-radius: 12px;
+    #history {
+      margin-top: 30px;
+      text-align: left;
       max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
+      margin: 30px auto;
+      background: rgba(255,255,255,0.05);
       border: 1px solid var(--accent-color);
+      border-radius: 10px;
+      padding: 15px;
     }
 
     #themeToggle {
@@ -93,265 +88,188 @@
       top: 10px;
       right: 10px;
     }
-
-    #historyLog {
-      margin-top: 40px;
-      max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
-      text-align: left;
-    }
-
-    #historyLog li {
-      background-color: var(--input-bg);
-      margin-bottom: 10px;
-      padding: 10px;
-      border-radius: 8px;
-      list-style: none;
-      border: 1px solid #ccc;
-    }
-
-    .audio-control {
-      margin-top: 5px;
-    }
   </style>
 </head>
 <body>
-
   <button id="themeToggle">🌙 Dark Mode</button>
   <h1>👶 Baby Sound Translator</h1>
 
   <button id="startBtn">🎤 Start Listening</button>
-  <button id="stopBtn" style="display:none;">🛑 Stop Listening</button>
-  <p id="translation">Waiting to hear baby sounds...</p>
+  <button id="stopBtn" style="display: none;">🛑 Stop</button>
+  <p id="status">Waiting to hear baby sound...</p>
   <div id="translatedMeaning"></div>
 
-  <div id="trainingContainer">
-    <h3>🧠 Train a New Sound</h3>
-    <input type="text" id="soundKey" placeholder="What is the baby saying? (e.g. 'mama')" />
-    <input type="text" id="soundMeaning" placeholder="What does it mean? (e.g. 'hungry')" />
-    <br>
-    <button id="recordSampleBtn">🎙 Record Sample</button>
-    <button id="stopRecordBtn" style="display:none;">⏹ Stop</button>
-    <br>
-    <button id="trainBtn">💾 Train Sound</button>
-    <button id="clearDataBtn" style="background-color: #e74c3c;">🧹 Clear Training</button>
-    <br><br>
-    <button id="exportDataBtn" style="background-color: #2ecc71;">📤 Export Data</button>
-    <button id="importDataBtn" style="background-color: #3498db;">📥 Import Data</button>
-    <input type="file" id="uploadDataInput" style="display:none;">
-  </div>
+  <h3>Train New Sound</h3>
+  <input type="text" id="meaningInput" placeholder="What does the sound mean?" />
+  <br>
+  <button id="recordBtn">🎙 Record Sample</button>
+  <button id="saveBtn">💾 Train Sound</button>
+  <br>
+  <button id="exportBtn">📤 Export Data</button>
+  <button id="importBtn">📥 Import Data</button>
+  <input type="file" id="fileInput" style="display:none;" />
 
-  <div id="historyLog">
-    <h3>🕒 History Log</h3>
-    <button onclick="clearHistory()" style="background-color: #ff7777;">🧹 Clear History</button>
-    <ul id="logList"></ul>
-  </div>
+  <div id="history"></div>
 
   <script>
+    const meaningInput = document.getElementById('meaningInput');
+    const recordBtn = document.getElementById('recordBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const status = document.getElementById('status');
+    const translatedMeaning = document.getElementById('translatedMeaning');
+    const historyBox = document.getElementById('history');
+    const themeToggle = document.getElementById('themeToggle');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const fileInput = document.getElementById('fileInput');
+
+    let trainedData = JSON.parse(localStorage.getItem('trainedData') || '{}');
+    let history = JSON.parse(localStorage.getItem('historyLog') || '[]');
+    let audioBlobMap = {}; // soundText -> Blob
+    let currentRecordingKey = null;
+
+    function setTheme(dark) {
+      document.body.classList.toggle('dark', dark);
+      localStorage.setItem('darkMode', dark);
+      themeToggle.textContent = dark ? '☀️ Light Mode' : '🌙 Dark Mode';
+    }
+    setTheme(localStorage.getItem('darkMode') === 'true');
+    themeToggle.onclick = () => setTheme(!document.body.classList.contains('dark'));
+
+    let mediaRecorder, recordedChunks = [];
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks);
+        if (currentRecordingKey) audioBlobMap[currentRecordingKey] = blob;
+        recordedChunks = [];
+      };
+    });
+
     const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const translationEl = document.getElementById('translation');
-    const translatedEl = document.getElementById('translatedMeaning');
-    const soundKey = document.getElementById('soundKey');
-    const soundMeaning = document.getElementById('soundMeaning');
-    const trainBtn = document.getElementById('trainBtn');
-    const clearDataBtn = document.getElementById('clearDataBtn');
-    const themeToggle = document.getElementById('themeToggle');
-    const exportBtn = document.getElementById('exportDataBtn');
-    const importBtn = document.getElementById('importDataBtn');
-    const uploadInput = document.getElementById('uploadDataInput');
-    const recordSampleBtn = document.getElementById('recordSampleBtn');
-    const stopRecordBtn = document.getElementById('stopRecordBtn');
-    const logList = document.getElementById('logList');
-
-    let isListening = false;
-    let trainedSounds = JSON.parse(localStorage.getItem('trainedSounds') || '{}');
-    let soundSamples = JSON.parse(localStorage.getItem('soundSamples') || '{}');
-    let historyLog = JSON.parse(localStorage.getItem('historyLog') || '[]');
-
-    renderHistory();
-
-    let mediaRecorder;
-    let recordedChunks = [];
-
-    function speak(text) {
-      const utter = new SpeechSynthesisUtterance(text);
-      speechSynthesis.speak(utter);
-    }
 
     startBtn.onclick = () => {
-      if (isListening) return;
       recognition.start();
-      isListening = true;
-      translationEl.textContent = "🎧 Listening...";
+      status.textContent = '🎧 Listening...';
       startBtn.style.display = 'none';
       stopBtn.style.display = 'inline-block';
     };
 
     stopBtn.onclick = () => {
       recognition.stop();
-      isListening = false;
-      translationEl.textContent = "🛑 Listening stopped.";
+      status.textContent = '🛑 Stopped';
       startBtn.style.display = 'inline-block';
       stopBtn.style.display = 'none';
     };
 
-    recognition.onresult = (event) => {
-      const transcript = event.results[event.resultIndex][0].transcript.trim().toLowerCase();
-      const meaning = trainedSounds[transcript] || 'Unknown';
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      historyLog.unshift({ heard: transcript, meaning, time: timestamp });
-      localStorage.setItem('historyLog', JSON.stringify(historyLog));
-      renderHistory();
-
-      if (trainedSounds[transcript]) {
-        translationEl.textContent = `✅ Recognized: "${transcript}"`;
-        translatedEl.textContent = `🍼 Meaning: ${meaning}`;
-        translatedEl.style.display = 'block';
+    recognition.onresult = e => {
+      const text = e.results[e.resultIndex][0].transcript.trim().toLowerCase();
+      if (trainedData[text]) {
+        const meaning = trainedData[text].meaning;
+        translatedMeaning.textContent = `🍼 ${meaning}`;
+        translatedMeaning.style.display = 'block';
         speak(meaning);
-      } else {
-        translationEl.textContent = `❓ Unrecognized sound: "${transcript}"`;
-        translatedEl.style.display = 'none';
-      }
-    };
-
-    trainBtn.onclick = () => {
-      const key = soundKey.value.trim().toLowerCase();
-      const meaning = soundMeaning.value.trim();
-      if (!key || !meaning) {
-        alert("Please enter both sound and meaning.");
-        return;
-      }
-      trainedSounds[key] = meaning;
-      localStorage.setItem('trainedSounds', JSON.stringify(trainedSounds));
-      alert(`✅ Sound "${key}" trained as "${meaning}"`);
-      soundKey.value = '';
-      soundMeaning.value = '';
-    };
-
-    clearDataBtn.onclick = () => {
-      if (confirm("Clear all training data?")) {
-        trainedSounds = {};
-        localStorage.removeItem('trainedSounds');
-        soundSamples = {};
-        localStorage.removeItem('soundSamples');
-        alert("Training data cleared.");
-      }
-    };
-
-    exportBtn.onclick = () => {
-      const blob = new Blob([JSON.stringify({ trainedSounds, soundSamples })], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'baby-sound-data.json';
-      link.click();
-    };
-
-    importBtn.onclick = () => uploadInput.click();
-
-    uploadInput.onchange = e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = event => {
-        try {
-          const data = JSON.parse(event.target.result);
-          trainedSounds = data.trainedSounds || {};
-          soundSamples = data.soundSamples || {};
-          localStorage.setItem('trainedSounds', JSON.stringify(trainedSounds));
-          localStorage.setItem('soundSamples', JSON.stringify(soundSamples));
-          alert("✅ Data imported!");
-        } catch {
-          alert("❌ Invalid file.");
+        if (trainedData[text].audio) {
+          const audio = new Audio(trainedData[text].audio);
+          audio.play();
         }
-      };
-      reader.readAsText(file);
+        const timestamp = new Date().toLocaleString();
+        history.push({ text, meaning, time: timestamp });
+        localStorage.setItem('historyLog', JSON.stringify(history));
+        renderHistory();
+      } else {
+        status.textContent = `❓ Unrecognized: "${text}"`;
+        translatedMeaning.style.display = 'none';
+      }
     };
 
-    recordSampleBtn.onclick = async () => {
-      const key = soundKey.value.trim().toLowerCase();
-      if (!key) {
-        alert("Enter the baby sound first.");
+    recognition.onerror = () => {
+      status.textContent = '⚠️ Error recognizing sound';
+    };
+
+    function speak(text) {
+      const u = new SpeechSynthesisUtterance(text);
+      speechSynthesis.speak(u);
+    }
+
+    recordBtn.onclick = () => {
+      if (!meaningInput.value.trim()) {
+        alert('Please enter the meaning first.');
         return;
       }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        recordedChunks = [];
-        mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            soundSamples[key] = reader.result;
-            localStorage.setItem('soundSamples', JSON.stringify(soundSamples));
-          };
-          reader.readAsDataURL(blob);
-        };
-        mediaRecorder.start();
-        recordSampleBtn.style.display = 'none';
-        stopRecordBtn.style.display = 'inline-block';
-      } catch (err) {
-        alert("Microphone access denied.");
-      }
+      currentRecordingKey = null;
+      recognition.stop();
+      mediaRecorder.start();
+      status.textContent = '🎙 Recording baby sound for 2s...';
+      setTimeout(() => {
+        mediaRecorder.stop();
+        status.textContent = '✅ Recorded';
+        currentRecordingKey = null;
+      }, 2000);
     };
 
-    stopRecordBtn.onclick = () => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
+    saveBtn.onclick = () => {
+      const meaning = meaningInput.value.trim();
+      if (!meaning || recordedChunks.length === 0) {
+        alert('Please record a sound and enter its meaning.');
+        return;
       }
-      recordSampleBtn.style.display = 'inline-block';
-      stopRecordBtn.style.display = 'none';
+      const text = prompt("What sound (word) should trigger this meaning?").trim().toLowerCase();
+      if (!text) return;
+      const blob = new Blob(recordedChunks);
+      const audioURL = URL.createObjectURL(blob);
+      trainedData[text] = { meaning, audio: audioURL };
+      localStorage.setItem('trainedData', JSON.stringify(trainedData));
+      meaningInput.value = '';
+      recordedChunks = [];
+      alert('✅ Sound saved successfully.');
     };
 
     function renderHistory() {
-      logList.innerHTML = '';
-      historyLog.forEach(entry => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-          <small>🕒 ${entry.time}</small><br>
-          <strong>👂 Heard:</strong> ${entry.heard}<br>
-          <strong>🍼 Meaning:</strong> ${entry.meaning}`;
-        if (soundSamples[entry.heard]) {
-          const audio = new Audio(soundSamples[entry.heard]);
-          const btn = document.createElement('button');
-          btn.className = 'audio-control';
-          btn.textContent = '▶️ Play Sample';
-          btn.onclick = () => audio.play();
-          li.appendChild(document.createElement('br'));
-          li.appendChild(btn);
+      historyBox.innerHTML = '<h3>🕒 History Log</h3>' + history.map(h => `
+        <div style="margin-bottom:10px;">
+          <strong>${h.time}</strong><br>
+          <em>Heard:</em> ${h.text} → <strong>${h.meaning}</strong>
+        </div>`).join('');
+    }
+    renderHistory();
+
+    exportBtn.onclick = () => {
+      const data = {
+        trainedData,
+        history
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'baby-sound-translator-data.json';
+      link.click();
+    };
+
+    importBtn.onclick = () => fileInput.click();
+
+    fileInput.onchange = e => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = event => {
+        try {
+          const imported = JSON.parse(event.target.result);
+          trainedData = imported.trainedData || {};
+          history = imported.history || [];
+          localStorage.setItem('trainedData', JSON.stringify(trainedData));
+          localStorage.setItem('historyLog', JSON.stringify(history));
+          renderHistory();
+          alert('✅ Data imported successfully.');
+        } catch {
+          alert('❌ Invalid JSON file.');
         }
-        logList.appendChild(li);
-      });
-    }
-
-    function clearHistory() {
-      if (confirm("Clear history log?")) {
-        historyLog = [];
-        localStorage.removeItem('historyLog');
-        renderHistory();
-      }
-    }
-
-    function setTheme(darkMode) {
-      document.body.classList.toggle('dark', darkMode);
-      localStorage.setItem('darkMode', darkMode);
-      themeToggle.textContent = darkMode ? '☀️ Light Mode' : '🌙 Dark Mode';
-    }
-
-    const savedTheme = localStorage.getItem('darkMode') === 'true';
-    setTheme(savedTheme);
-
-    themeToggle.onclick = () => {
-      const isDark = document.body.classList.contains('dark');
-      setTheme(!isDark);
+      };
+      reader.readAsText(file);
     };
   </script>
 </body>
