@@ -72,6 +72,12 @@
       margin-right: auto;
     }
 
+    #messageBox {
+      margin-top: 15px;
+      font-weight: bold;
+      color: var(--text-color);
+    }
+
     #history {
       margin-top: 30px;
       text-align: left;
@@ -107,8 +113,10 @@
   <br>
   <button id="exportBtn">📤 Export Data</button>
   <button id="importBtn">📥 Import Data</button>
+  <button id="deleteBtn" style="background-color:#ff4d4d;">🗑️ Delete All Data</button>
   <input type="file" id="fileInput" style="display:none;" />
 
+  <div id="messageBox"></div>
   <div id="history"></div>
 
   <script>
@@ -119,10 +127,12 @@
     const stopBtn = document.getElementById('stopBtn');
     const status = document.getElementById('status');
     const translatedMeaning = document.getElementById('translatedMeaning');
+    const messageBox = document.getElementById('messageBox');
     const historyBox = document.getElementById('history');
     const themeToggle = document.getElementById('themeToggle');
     const exportBtn = document.getElementById('exportBtn');
     const importBtn = document.getElementById('importBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
     const fileInput = document.getElementById('fileInput');
 
     let trainedData = JSON.parse(localStorage.getItem('trainedData') || '{}');
@@ -145,7 +155,7 @@
 
       recordBtn.onclick = () => {
         if (!meaningInput.value.trim()) {
-          alert('Please enter the meaning first.');
+          messageBox.textContent = '⚠️ Please enter the meaning before recording.';
           return;
         }
         recordedChunks = [];
@@ -160,7 +170,7 @@
       saveBtn.onclick = () => {
         const meaning = meaningInput.value.trim();
         if (!meaning || recordedChunks.length === 0) {
-          alert('Please record a sound and enter its meaning.');
+          messageBox.textContent = '⚠️ Please type the meaning and record the sound first.';
           return;
         }
         const text = prompt("What sound should trigger this meaning?").trim().toLowerCase();
@@ -171,7 +181,7 @@
         localStorage.setItem('trainedData', JSON.stringify(trainedData));
         meaningInput.value = '';
         recordedChunks = [];
-        alert('✅ Sound saved.');
+        messageBox.textContent = '✅ Success! Sound saved.';
       };
     });
 
@@ -216,7 +226,6 @@
     recognition.onresult = e => {
       const text = e.results[e.resultIndex][0].transcript.trim().toLowerCase();
       lastTranscript = text;
-      console.log("Heard:", text);
     };
 
     recognition.onerror = () => {
@@ -258,6 +267,18 @@
         }
       };
       reader.readAsText(file);
+    };
+
+    deleteBtn.onclick = () => {
+      if (confirm("⚠️ This will delete all trained sounds and history. Are you sure?")) {
+        trainedData = {};
+        history = [];
+        localStorage.removeItem('trainedData');
+        localStorage.removeItem('historyLog');
+        translatedMeaning.style.display = 'none';
+        renderHistory();
+        alert("🗑️ All data deleted.");
+      }
     };
   </script>
 </body>
