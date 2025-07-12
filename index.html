@@ -127,25 +127,51 @@
 
     let trainedData = JSON.parse(localStorage.getItem('trainedData') || '{}');
     let history = JSON.parse(localStorage.getItem('historyLog') || '[]');
-    let audioBlobMap = {}; // soundText -> Blob
-    let currentRecordingKey = null;
+    let recordedChunks = [];
+    let lastTranscript = null;
 
     function setTheme(dark) {
       document.body.classList.toggle('dark', dark);
       localStorage.setItem('darkMode', dark);
       themeToggle.textContent = dark ? '☀️ Light Mode' : '🌙 Dark Mode';
     }
+
     setTheme(localStorage.getItem('darkMode') === 'true');
     themeToggle.onclick = () => setTheme(!document.body.classList.contains('dark'));
 
-    let mediaRecorder, recordedChunks = [];
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream);
       mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks);
-        if (currentRecordingKey) audioBlobMap[currentRecordingKey] = blob;
+
+      recordBtn.onclick = () => {
+        if (!meaningInput.value.trim()) {
+          alert('Please enter the meaning first.');
+          return;
+        }
         recordedChunks = [];
+        mediaRecorder.start();
+        status.textContent = '🎙 Recording for 2s...';
+        setTimeout(() => {
+          mediaRecorder.stop();
+          status.textContent = '✅ Recorded';
+        }, 2000);
+      };
+
+      saveBtn.onclick = () => {
+        const meaning = meaningInput.value.trim();
+        if (!meaning || recordedChunks.length === 0) {
+          alert('Please record a sound and enter its meaning.');
+          return;
+        }
+        const text = prompt("What sound should trigger this meaning?").trim().toLowerCase();
+        if (!text) return;
+        const blob = new Blob(recordedChunks);
+        const audioURL = URL.createObjectURL(blob);
+        trainedData[text] = { meaning, audio: audioURL };
+        localStorage.setItem('trainedData', JSON.stringify(trainedData));
+        meaningInput.value = '';
+        recordedChunks = [];
+        alert('✅ Sound saved.');
       };
     });
 
@@ -154,119 +180,81 @@
     recognition.interimResults = false;
 
     startBtn.onclick = () => {
-      recognition.start();
-      status.textContent = '🎧 Listening...';
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'inline-block';
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+        recognition.start();
+        status.textContent = '🎧 Listening...';
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+        lastTranscript = null;
+      }).catch(() => {
+        alert("🎤 Please allow microphone access.");
+      });
     };
 
     stopBtn.onclick = () => {
       recognition.stop();
-      status.textContent = '🛑 Stopped';
       startBtn.style.display = 'inline-block';
       stopBtn.style.display = 'none';
+      if (lastTranscript) {
+        const data = trainedData[lastTranscript];
+        if (data) {
+          translatedMeaning.textContent = `🍼 ${data.meaning}`;
+          translatedMeaning.style.display = 'block';
+          const audio = new Audio(data.audio);
+          audio.play();
+          const timestamp = new Date().toLocaleString();
+          history.push({ text: lastTranscript, meaning: data.meaning, time: timestamp });
+          localStorage.setItem('historyLog', JSON.stringify(history));
+          renderHistory();
+        }
+      } else {
+        translatedMeaning.textContent = '😕 No sound recognized.';
+        translatedMeaning.style.display = 'block';
+      }
     };
 
     recognition.onresult = e => {
       const text = e.results[e.resultIndex][0].transcript.trim().toLowerCase();
-      if (trainedData[text]) {
-        const meaning = trainedData[text].meaning;
-        translatedMeaning.textContent = `🍼 ${meaning}`;
-        translatedMeaning.style.display = 'block';
-        speak(meaning);
-        if (trainedData[text].audio) {
-          const audio = new Audio(trainedData[text].audio);
-          audio.play();
-        }
-        const timestamp = new Date().toLocaleString();
-        history.push({ text, meaning, time: timestamp });
-        localStorage.setItem('historyLog', JSON.stringify(history));
-        renderHistory();
-      } else {
-        status.textContent = `❓ Unrecognized: "${text}"`;
-        translatedMeaning.style.display = 'none';
-      }
+      lastTranscript = text;
+      console.log("Heard:", text);
     };
 
     recognition.onerror = () => {
       status.textContent = '⚠️ Error recognizing sound';
     };
 
-    function speak(text) {
-      const u = new SpeechSynthesisUtterance(text);
-      speechSynthesis.speak(u);
-    }
-
-    recordBtn.onclick = () => {
-      if (!meaningInput.value.trim()) {
-        alert('Please enter the meaning first.');
-        return;
-      }
-      currentRecordingKey = null;
-      recognition.stop();
-      mediaRecorder.start();
-      status.textContent = '🎙 Recording baby sound for 2s...';
-      setTimeout(() => {
-        mediaRecorder.stop();
-        status.textContent = '✅ Recorded';
-        currentRecordingKey = null;
-      }, 2000);
-    };
-
-    saveBtn.onclick = () => {
-      const meaning = meaningInput.value.trim();
-      if (!meaning || recordedChunks.length === 0) {
-        alert('Please record a sound and enter its meaning.');
-        return;
-      }
-      const text = prompt("What sound (word) should trigger this meaning?").trim().toLowerCase();
-      if (!text) return;
-      const blob = new Blob(recordedChunks);
-      const audioURL = URL.createObjectURL(blob);
-      trainedData[text] = { meaning, audio: audioURL };
-      localStorage.setItem('trainedData', JSON.stringify(trainedData));
-      meaningInput.value = '';
-      recordedChunks = [];
-      alert('✅ Sound saved successfully.');
-    };
-
     function renderHistory() {
       historyBox.innerHTML = '<h3>🕒 History Log</h3>' + history.map(h => `
         <div style="margin-bottom:10px;">
           <strong>${h.time}</strong><br>
-          <em>Heard:</em> ${h.text} → <strong>${h.meaning}</strong>
+          <strong>${h.meaning}</strong>
         </div>`).join('');
     }
     renderHistory();
 
     exportBtn.onclick = () => {
-      const data = {
-        trainedData,
-        history
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify({ trainedData, history }, null, 2)], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'baby-sound-translator-data.json';
+      link.download = 'baby-translator-data.json';
       link.click();
     };
 
     importBtn.onclick = () => fileInput.click();
-
     fileInput.onchange = e => {
       const file = e.target.files[0];
       const reader = new FileReader();
       reader.onload = event => {
         try {
-          const imported = JSON.parse(event.target.result);
-          trainedData = imported.trainedData || {};
-          history = imported.history || [];
+          const data = JSON.parse(event.target.result);
+          trainedData = data.trainedData || {};
+          history = data.history || [];
           localStorage.setItem('trainedData', JSON.stringify(trainedData));
           localStorage.setItem('historyLog', JSON.stringify(history));
           renderHistory();
-          alert('✅ Data imported successfully.');
+          alert('✅ Data imported!');
         } catch {
-          alert('❌ Invalid JSON file.');
+          alert('❌ Invalid file.');
         }
       };
       reader.readAsText(file);
