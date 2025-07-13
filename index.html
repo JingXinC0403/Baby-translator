@@ -26,7 +26,7 @@
     }
 
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Segoe UI', sans-serif;
       background-color: var(--bg-color);
       color: var(--text-color);
       padding: 20px;
@@ -34,11 +34,9 @@
       transition: background-color 0.3s, color 0.3s;
     }
 
-    h1 { color: var(--accent-color); }
-
     button {
       padding: 10px 18px;
-      margin: 8px;
+      margin: 6px;
       font-size: 1em;
       border: none;
       border-radius: 6px;
@@ -47,16 +45,18 @@
       cursor: pointer;
     }
 
-    button:hover { background-color: var(--button-hover); }
+    button:hover {
+      background-color: var(--button-hover);
+    }
 
-    input[type="text"], input[type="file"] {
+    input[type="text"] {
       padding: 10px;
       width: 70%;
+      margin-bottom: 10px;
       border-radius: 6px;
       border: 1px solid #ccc;
       background-color: var(--input-bg);
       color: var(--text-color);
-      margin-bottom: 10px;
     }
 
     #translatedMeaning {
@@ -70,12 +70,6 @@
       max-width: 500px;
       margin-left: auto;
       margin-right: auto;
-    }
-
-    #messageBox {
-      margin-top: 15px;
-      font-weight: bold;
-      color: var(--text-color);
     }
 
     #history {
@@ -108,12 +102,11 @@
   <h3>Train New Sound</h3>
   <input type="text" id="meaningInput" placeholder="What does the sound mean?" />
   <br>
-  <button id="recordBtn">🎙 Record Sample</button>
   <button id="saveBtn">💾 Train Sound</button>
   <br>
   <button id="exportBtn">📤 Export Data</button>
   <button id="importBtn">📥 Import Data</button>
-  <button id="deleteBtn" style="background-color:#ff4d4d;">🗑️ Delete All Data</button>
+  <button id="deleteBtn" style="background-color:#ff4d4d;">🗑️ Delete All</button>
   <input type="file" id="fileInput" style="display:none;" />
 
   <div id="messageBox"></div>
@@ -121,13 +114,11 @@
 
   <script>
     const meaningInput = document.getElementById('meaningInput');
-    const recordBtn = document.getElementById('recordBtn');
     const saveBtn = document.getElementById('saveBtn');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const status = document.getElementById('status');
     const translatedMeaning = document.getElementById('translatedMeaning');
-    const messageBox = document.getElementById('messageBox');
     const historyBox = document.getElementById('history');
     const themeToggle = document.getElementById('themeToggle');
     const exportBtn = document.getElementById('exportBtn');
@@ -137,8 +128,9 @@
 
     let trainedData = JSON.parse(localStorage.getItem('trainedData') || '{}');
     let history = JSON.parse(localStorage.getItem('historyLog') || '[]');
-    let recordedChunks = [];
     let lastTranscript = null;
+
+    trainedData['neh'] = { meaning: 'hungry' }; // Predefined sound
 
     function setTheme(dark) {
       document.body.classList.toggle('dark', dark);
@@ -148,42 +140,6 @@
 
     setTheme(localStorage.getItem('darkMode') === 'true');
     themeToggle.onclick = () => setTheme(!document.body.classList.contains('dark'));
-
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-
-      recordBtn.onclick = () => {
-        if (!meaningInput.value.trim()) {
-          messageBox.textContent = '⚠️ Please enter the meaning before recording.';
-          return;
-        }
-        recordedChunks = [];
-        mediaRecorder.start();
-        status.textContent = '🎙 Recording for 2s...';
-        setTimeout(() => {
-          mediaRecorder.stop();
-          status.textContent = '✅ Recorded';
-        }, 2000);
-      };
-
-      saveBtn.onclick = () => {
-        const meaning = meaningInput.value.trim();
-        if (!meaning || recordedChunks.length === 0) {
-          messageBox.textContent = '⚠️ Please type the meaning and record the sound first.';
-          return;
-        }
-        const text = prompt("What sound should trigger this meaning?").trim().toLowerCase();
-        if (!text) return;
-        const blob = new Blob(recordedChunks);
-        const audioURL = URL.createObjectURL(blob);
-        trainedData[text] = { meaning, audio: audioURL };
-        localStorage.setItem('trainedData', JSON.stringify(trainedData));
-        meaningInput.value = '';
-        recordedChunks = [];
-        messageBox.textContent = '✅ Success! Sound saved.';
-      };
-    });
 
     const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     recognition.continuous = true;
@@ -205,18 +161,14 @@
       recognition.stop();
       startBtn.style.display = 'inline-block';
       stopBtn.style.display = 'none';
-      if (lastTranscript) {
+      if (lastTranscript && trainedData[lastTranscript]) {
         const data = trainedData[lastTranscript];
-        if (data) {
-          translatedMeaning.textContent = `🍼 ${data.meaning}`;
-          translatedMeaning.style.display = 'block';
-          const audio = new Audio(data.audio);
-          audio.play();
-          const timestamp = new Date().toLocaleString();
-          history.push({ text: lastTranscript, meaning: data.meaning, time: timestamp });
-          localStorage.setItem('historyLog', JSON.stringify(history));
-          renderHistory();
-        }
+        translatedMeaning.textContent = `🍼 ${data.meaning}`;
+        translatedMeaning.style.display = 'block';
+        const timestamp = new Date().toLocaleString();
+        history.push({ text: lastTranscript, meaning: data.meaning, time: timestamp });
+        localStorage.setItem('historyLog', JSON.stringify(history));
+        renderHistory();
       } else {
         translatedMeaning.textContent = '😕 No sound recognized.';
         translatedMeaning.style.display = 'block';
@@ -230,6 +182,20 @@
 
     recognition.onerror = () => {
       status.textContent = '⚠️ Error recognizing sound';
+    };
+
+    saveBtn.onclick = () => {
+      const meaning = meaningInput.value.trim();
+      if (!meaning) {
+        alert('Please type a meaning first.');
+        return;
+      }
+      const text = prompt("What baby sound should trigger this meaning?").trim().toLowerCase();
+      if (!text) return;
+      trainedData[text] = { meaning };
+      localStorage.setItem('trainedData', JSON.stringify(trainedData));
+      meaningInput.value = '';
+      alert('✅ Saved successfully!');
     };
 
     function renderHistory() {
@@ -270,7 +236,7 @@
     };
 
     deleteBtn.onclick = () => {
-      if (confirm("⚠️ This will delete all trained sounds and history. Are you sure?")) {
+      if (confirm("⚠️ Delete all trained sounds and history?")) {
         trainedData = {};
         history = [];
         localStorage.removeItem('trainedData');
