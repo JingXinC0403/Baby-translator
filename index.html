@@ -2,244 +2,199 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>👶 Baby Sound Translator</title>
   <style>
-    :root {
-      --bg-color: #ffffff;
-      --text-color: #222;
-      --accent-color: #4a90e2;
-      --button-color: #4a90e2;
-      --button-hover: #3b7dc4;
-      --input-bg: #f9f9f9;
-      --highlight-bg: #ff6666;
-    }
-
-    body.dark {
-      --bg-color: #121212;
-      --text-color: #e0e0e0;
-      --accent-color: #66b2ff;
-      --button-color: #333;
-      --button-hover: #555;
-      --input-bg: #1e1e1e;
-      --highlight-bg: #e74c3c;
-    }
-
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
+      font-family: Arial, sans-serif;
       padding: 20px;
       text-align: center;
-      transition: background-color 0.3s, color 0.3s;
+      background: #f5f5f5;
     }
-
     button {
+      margin: 10px;
       padding: 10px 20px;
-      margin: 8px;
-      font-size: 1em;
-      border: none;
-      border-radius: 6px;
-      background-color: var(--button-color);
-      color: white;
+      font-size: 16px;
       cursor: pointer;
-      transition: background-color 0.2s;
     }
-
-    button:hover {
-      background-color: var(--button-hover);
-    }
-
-    input[type="text"] {
-      padding: 10px;
-      width: 70%;
-      margin-bottom: 12px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      background-color: var(--input-bg);
-      color: var(--text-color);
-    }
-
     #translatedMeaning {
       margin-top: 20px;
-      font-size: 1.3em;
-      background-color: var(--highlight-bg);
-      padding: 15px;
-      border-radius: 10px;
-      display: none;
-      max-width: 500px;
-      margin-inline: auto;
+      padding: 10px;
+      font-size: 18px;
+      background: #ff6666;
       color: #fff;
+      display: none;
     }
-
-    #history {
-      margin-top: 30px;
-      text-align: left;
-      max-width: 600px;
-      margin-inline: auto;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--accent-color);
-      border-radius: 10px;
-      padding: 15px;
+    audio {
+      display: block;
+      margin: 10px auto;
     }
-
-    #themeToggle {
-      position: fixed;
-      top: 10px;
-      right: 10px;
+    .sample-item {
+      background: #fff;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 15px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
     }
   </style>
 </head>
 <body>
-  <button id="themeToggle">🌙 Dark Mode</button>
-  <h1>👶 Baby Sound Translator</h1>
+  <h1>👶 Baby Sound Translator (Sample-Based)</h1>
 
-  <button id="startBtn">🎤 Start Listening</button>
-  <button id="stopBtn" style="display: none;">🛑 Stop</button>
-  <p id="status">Waiting to hear baby sound...</p>
+  <button id="recordBtn">🔴 Record Baby Sound</button>
+  <button id="stopBtn" disabled>⏹️ Stop</button>
+  <br />
+  <input type="text" id="meaningInput" placeholder="What does the sound mean?" />
+  <button id="saveBtn">💾 Save Sample</button>
+
+  <div>
+    <button id="exportBtn">📤 Export Samples</button>
+    <button id="importBtn">📥 Import Samples</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none;" />
+  </div>
+
   <div id="translatedMeaning"></div>
 
-  <h3>Train New Sound</h3>
-  <input type="text" id="meaningInput" placeholder="What does the sound mean?" />
-  <br />
-  <button id="saveBtn">💾 Train Sound</button>
-  <br />
-  <button id="exportBtn">📤 Export Data</button>
-  <button id="importBtn">📥 Import Data</button>
-  <button id="deleteBtn" style="background-color:#e74c3c;">🗑️ Delete All</button>
-  <input type="file" id="fileInput" style="display:none;" />
-
-  <div id="history"></div>
+  <h3>🎧 Recorded Samples</h3>
+  <div id="sampleList"></div>
 
   <script>
-    const meaningInput = document.getElementById('meaningInput');
-    const saveBtn = document.getElementById('saveBtn');
-    const startBtn = document.getElementById('startBtn');
+    const recordBtn = document.getElementById('recordBtn');
     const stopBtn = document.getElementById('stopBtn');
-    const status = document.getElementById('status');
+    const saveBtn = document.getElementById('saveBtn');
+    const meaningInput = document.getElementById('meaningInput');
+    const sampleList = document.getElementById('sampleList');
     const translatedMeaning = document.getElementById('translatedMeaning');
-    const historyBox = document.getElementById('history');
-    const themeToggle = document.getElementById('themeToggle');
     const exportBtn = document.getElementById('exportBtn');
     const importBtn = document.getElementById('importBtn');
-    const deleteBtn = document.getElementById('deleteBtn');
     const fileInput = document.getElementById('fileInput');
 
-    let trainedData = JSON.parse(localStorage.getItem('trainedData') || '{}');
-    let history = JSON.parse(localStorage.getItem('historyLog') || '[]');
-    let lastTranscript = null;
+    let mediaRecorder;
+    let chunks = [];
+    let currentBlob = null;
 
-    function setTheme(dark) {
-      document.body.classList.toggle('dark', dark);
-      localStorage.setItem('darkMode', dark);
-      themeToggle.textContent = dark ? '☀️ Light Mode' : '🌙 Dark Mode';
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
     }
 
-    setTheme(localStorage.getItem('darkMode') === 'true');
-    themeToggle.onclick = () => setTheme(!document.body.classList.contains('dark'));
+    function base64ToBlob(base64) {
+      const arr = base64.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--) u8arr[n] = bstr.charCodeAt(n);
+      return new Blob([u8arr], {type: mime});
+    }
 
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.continuous = true;
-    recognition.interimResults = false;
+    let samples = JSON.parse(localStorage.getItem('babySamples') || '[]');
 
-    startBtn.onclick = () => {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-        recognition.start();
-        status.textContent = '🎧 Listening...';
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
-        lastTranscript = null;
-      }).catch(() => {
-        alert("🎤 Please allow microphone access.");
+    function renderSamples() {
+      sampleList.innerHTML = '';
+      samples.forEach((s, i) => {
+        const item = document.createElement('div');
+        item.className = 'sample-item';
+
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = s.base64;
+
+        const label = document.createElement('p');
+        label.innerHTML = `<strong>${s.meaning}</strong>`;
+
+        const matchBtn = document.createElement('button');
+        matchBtn.textContent = '🍼 Show Meaning';
+        matchBtn.onclick = () => {
+          translatedMeaning.textContent = `🍼 This means: ${s.meaning}`;
+          translatedMeaning.style.display = 'block';
+        };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '🗑️ Delete';
+        deleteBtn.onclick = () => {
+          samples.splice(i, 1);
+          localStorage.setItem('babySamples', JSON.stringify(samples));
+          renderSamples();
+        };
+
+        item.append(label, audio, matchBtn, deleteBtn);
+        sampleList.appendChild(item);
       });
+    }
+
+    recordBtn.onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      chunks = [];
+
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        currentBlob = new Blob(chunks, { type: 'audio/webm' });
+      };
+
+      mediaRecorder.start();
+      recordBtn.disabled = true;
+      stopBtn.disabled = false;
     };
 
     stopBtn.onclick = () => {
-      recognition.stop();
-      startBtn.style.display = 'inline-block';
-      stopBtn.style.display = 'none';
-      if (lastTranscript && trainedData[lastTranscript]) {
-        const data = trainedData[lastTranscript];
-        translatedMeaning.textContent = `🍼 ${data.meaning}`;
-        translatedMeaning.style.display = 'block';
-        const timestamp = new Date().toLocaleString();
-        history.push({ text: lastTranscript, meaning: data.meaning, time: timestamp });
-        localStorage.setItem('historyLog', JSON.stringify(history));
-        renderHistory();
-      } else {
-        translatedMeaning.textContent = '😕 No sound recognized.';
-        translatedMeaning.style.display = 'block';
-      }
+      mediaRecorder.stop();
+      recordBtn.disabled = false;
+      stopBtn.disabled = true;
     };
 
-    recognition.onresult = e => {
-      const text = e.results[e.resultIndex][0].transcript.trim().toLowerCase();
-      lastTranscript = text;
-    };
-
-    recognition.onerror = () => {
-      status.textContent = '⚠️ Error recognizing sound';
-    };
-
-    saveBtn.onclick = () => {
+    saveBtn.onclick = async () => {
+      if (!currentBlob) return alert('Please record a sound first!');
       const meaning = meaningInput.value.trim();
-      if (!meaning) return alert('Please type a meaning.');
-      const text = prompt("What baby sound should trigger this meaning?").trim().toLowerCase();
-      if (!text) return;
-      trainedData[text] = { meaning };
-      localStorage.setItem('trainedData', JSON.stringify(trainedData));
-      meaningInput.value = '';
-      alert('✅ Sound trained successfully!');
-    };
+      if (!meaning) return alert('Please enter a meaning.');
 
-    function renderHistory() {
-      historyBox.innerHTML = '<h3>🕒 History Log</h3>' + history.map(h => `
-        <div style="margin-bottom:10px;">
-          <strong>${h.time}</strong><br />
-          <em>${h.text}</em> ➡️ <strong>${h.meaning}</strong>
-        </div>`).join('');
-    }
-    renderHistory();
+      const base64 = await blobToBase64(currentBlob);
+      samples.push({ meaning, base64 });
+      localStorage.setItem('babySamples', JSON.stringify(samples));
+      meaningInput.value = '';
+      renderSamples();
+      currentBlob = null;
+      alert('✅ Sample saved!');
+    };
 
     exportBtn.onclick = () => {
-      const blob = new Blob([JSON.stringify({ trainedData, history }, null, 2)], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'baby-translator-data.json';
-      link.click();
+      const blob = new Blob([JSON.stringify(samples, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'baby-samples.json';
+      a.click();
+      URL.revokeObjectURL(url);
     };
 
     importBtn.onclick = () => fileInput.click();
+
     fileInput.onchange = e => {
       const file = e.target.files[0];
+      if (!file) return;
+
       const reader = new FileReader();
-      reader.onload = event => {
+      reader.onload = () => {
         try {
-          const data = JSON.parse(event.target.result);
-          trainedData = data.trainedData || {};
-          history = data.history || [];
-          localStorage.setItem('trainedData', JSON.stringify(trainedData));
-          localStorage.setItem('historyLog', JSON.stringify(history));
-          renderHistory();
-          alert('✅ Data imported!');
+          const imported = JSON.parse(reader.result);
+          if (!Array.isArray(imported)) throw new Error();
+          samples = imported;
+          localStorage.setItem('babySamples', JSON.stringify(samples));
+          renderSamples();
+          alert('✅ Samples imported!');
         } catch {
-          alert('❌ Invalid file.');
+          alert('❌ Invalid file format.');
         }
       };
       reader.readAsText(file);
     };
 
-    deleteBtn.onclick = () => {
-      if (confirm("⚠️ Delete all trained sounds and history?")) {
-        trainedData = {};
-        history = [];
-        localStorage.removeItem('trainedData');
-        localStorage.removeItem('historyLog');
-        translatedMeaning.style.display = 'none';
-        renderHistory();
-        alert("🗑️ All data deleted.");
-      }
-    };
+    renderSamples();
   </script>
 </body>
 </html>
